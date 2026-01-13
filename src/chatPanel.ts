@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ByteAIClient } from './byteAIClient';
 import { TerminalManager } from './terminalAccess';
+import { AGENT_PERSONAS } from './agents';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
     public static readonly viewType = 'byteAI.chatView';
@@ -41,10 +42,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         }
     }
 
-    // Called by the extension commands (e.g., from Right Click)
     public async runCommand(command: 'explain' | 'fix' | 'doc') {
         if (!this._view) {
-            // Focus the view if it's not visible (best effort)
             await vscode.commands.executeCommand('byteAI.chatView.focus');
         }
 
@@ -55,7 +54,6 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             case 'doc': message = "/doc"; break;
         }
 
-        // Simulate user typing this
         if (this._view) {
             this._view.webview.postMessage({ type: 'addResponse', value: `*Running command: ${message}*` });
             await this.handleUserMessage(message);
@@ -64,74 +62,68 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
     private async handleUserMessage(message: string) {
         if (!this._view) { return; }
+        let fullContext = "";
 
-        let fullPrompt = message;
+        // 1. Resolve @ Mentions
+        const fileRegex = /@([a-zA-Z0-9_\-\.\/]+)/g;
+        const matches = message.match(fileRegex);
 
-        // 1. Gather Context & Diagnostics
+        if (matches) {
+            for (const match of matches) {
+                const filename = match.substring(1);
+                const files = await vscode.workspace.findFiles(`**/${filename}*`, '**/node_modules/**', 1);
+                if (files.length > 0) {
+                    const doc = await vscode.workspace.openTextDocument(files[0]);
+                    fullContext += `\n\n[CONTEXT FILE: ${files[0].fsPath}]\n\`\`\`${doc.languageId}\n${doc.getText()}\n\`\`\`\n`;
+                }
+            }
+        }
+
+        // 2. Active Editor Context
         const editor = vscode.window.activeTextEditor;
-        let contextBlock = "";
-        let diagnosticsBlock = "";
-
         if (editor) {
             const document = editor.document;
             const selection = editor.selection;
             const text = selection.isEmpty ? document.getText() : document.getText(selection);
-            const rangeInfo = selection.isEmpty ? "Full File" : `Lines ${selection.start.line + 1}-${selection.end.line + 1}`;
 
-            // Fetch Diagnostics (Errors/Warnings)
+            fullContext += `\n\n[ACTIVE EDITOR: ${document.fileName}]\n\`\`\`${document.languageId}\n${text}\n\`\`\``;
+
             const diagnostics = vscode.languages.getDiagnostics(document.uri);
             if (diagnostics.length > 0) {
-                const diagStrings = diagnostics.map(d =>
-                    `[${vscode.DiagnosticSeverity[d.severity]}] Line ${d.range.start.line + 1}: ${d.message}`
-                ).join('\n');
-                diagnosticsBlock = `\n\nERRORS DETECTED:\n${diagStrings}\n`;
+                const errorMsg = diagnostics.map(d => `Line ${d.range.start.line + 1}: ${d.message}`).join('\n');
+                fullContext += `\n\n[ERRORS DETECTED]:\n${errorMsg}`;
             }
-
-            contextBlock = `\n\nCONTEXT:\nFile: ${document.fileName}\nRange: ${rangeInfo}\nLanguage: ${document.languageId}\n${diagnosticsBlock}Code:\n\`\`\`${document.languageId}\n${text}\n\`\`\`\n`;
         }
 
-        // 2. Parse Slash Commands
-        if (message.startsWith('/')) {
-            const cmd = message.split(' ')[0];
-            if (cmd === '/explain') {
-                fullPrompt = `Explain the following code in detail:${contextBlock}`;
-            } else if (cmd === '/fix') {
-                fullPrompt = `Analyze the following code, especially the errors, and provide a fixed version:${contextBlock}`;
-            } else if (cmd === '/doc') {
-                fullPrompt = `Generate documentation (docstrings/comments) for the following code:${contextBlock}`;
-            } else {
-                // Generic slash command or just passing through
-                fullPrompt = `${message}\n${contextBlock}`;
-            }
-        } else {
-            // Normal chat - only append context if it seems relevant or always?
-            // Copilot usually appends context implicitly.
-            // We'll append it but tell AI to use it if needed.
-            // To avoid token limits on huge files, we might stick to selection or just sending it.
-            // For now, let's send it.
-            fullPrompt = `${message}\n${contextBlock}`;
+        // 3. Agent Routing
+        let systemPrompt = AGENT_PERSONAS.ORCHESTRATOR;
+        if (message.startsWith('/plan')) {
+            systemPrompt = AGENT_PERSONAS.PLANNER;
+            message = message.replace('/plan', '').trim();
+        } else if (message.startsWith('/fix') || message.includes('fix')) {
+            systemPrompt = AGENT_PERSONAS.REVIEWER;
         }
 
+        const prompt = `${systemPrompt}\n\n[USER CONTEXT]:\n${fullContext}\n\n[USER REQUEST]: ${message}`;
+
+        // 4. Send
         try {
-            // Stream response and wait for completion
             const fullResponse = await this._client.streamResponse(
-                fullPrompt,
+                prompt,
                 (chunk) => {
                     this._view?.webview.postMessage({ type: 'addResponse', value: chunk });
                 },
                 (err) => {
-                    this._view?.webview.postMessage({ type: 'addResponse', value: `Error: ${err}` });
-                    vscode.window.showErrorMessage(`Byte AI Connection Error: ${err}`);
+                    this._view?.webview.postMessage({ type: 'addResponse', value: "Error: " + err });
                 }
             );
 
-            // Process commands after response is complete
             if (fullResponse) {
-                await this._terminalManager.processAndExecute(fullResponse);
+                this._terminalManager.processAndExecute(fullResponse);
             }
 
-        } catch (e) {
-            vscode.window.showErrorMessage(`Byte AI Error: ${e}`);
+        } catch (error: any) {
+            this._view?.webview.postMessage({ type: 'addResponse', value: "Error: " + error.message });
         }
     }
 
@@ -234,7 +226,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     background: var(--input-bg);
                     border: 1px solid var(--vscode-input-border);
                     border-radius: 6px;
-                    padding: 4px; /* Padding for border effect */
+                    padding: 4px;
                 }
                 .input-container:focus-within {
                     border-color: var(--vscode-focusBorder);
@@ -261,7 +253,6 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     align-items: center;
                 }
                 .btn-send:hover { opacity: 1; color: var(--accent-color); }
-                /* Custom Scrollbar */
                 ::-webkit-scrollbar { width: 4px; }
                 ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
                 ::-webkit-scrollbar-track { background: transparent; }
@@ -269,21 +260,21 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         </head>
         <body>
             <div class="header">
-                <h3>Byte Coder Agent</h3>
+                <h3>Byte Coder v2.0</h3>
                 <span class="status-badge">ONLINE</span>
             </div>
             <div class="chat-container" id="chat">
                 <div class="message assistant">
-                    <strong>🚀 System Ready.</strong><br>
-                    I am your Senior Architect. <br><br>
-                    Use <code>/fix</code> to repair errors.<br>
-                    Use <code>/explain</code> to understand logic.<br>
-                    Or just ask.
+                    <strong>👋 Byte Coder v2.0 Online.</strong><br><br>
+                    <strong>New Features:</strong><br>
+                    • Mention files: <code>@filename</code><br>
+                    • Agents: <code>/plan</code>, <code>/fix</code><br>
+                    • Or just ask to start coding!
                 </div>
             </div>
             <div class="input-area">
                 <div class="input-container">
-                    <input type="text" id="input" placeholder="Ask anything..." autocomplete="off"/>
+                    <input type="text" id="input" placeholder="Ask anything... (@filename for context)" autocomplete="off"/>
                     <button class="btn-send" id="sendBtn">➤</button>
                 </div>
             </div>
@@ -324,7 +315,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 function addMessage(role, text) {
                     const div = document.createElement('div');
                     div.className = 'message ' + role;
-                    div.innerHTML = text.replace(/\\n/g, '<br>'); // Simple formatting
+                    div.innerHTML = text.replace(/\\n/g, '<br>');
                     chat.appendChild(div);
                     chat.scrollTop = chat.scrollHeight;
                 }
