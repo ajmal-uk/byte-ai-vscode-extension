@@ -1,0 +1,94 @@
+{
+    "name": "byte-coder-ai-agent",
+    "displayName": "Byte Coder Ai Agent",
+    "description": "Advanced coding assistant with command line support and strict security policies.",
+    "icon": "images/icon.png",
+    "publisher": "uthalkkan",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/uthalkkan/byte-coder-ai-agent"
+    },
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "AI",
+        "Other"
+    ],
+    "activationEvents": [],
+    "main": "./out/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "byte-ai-sidebar",
+                    "title": "Byte AI",
+                    "icon": "$(hubot)"
+                }
+            ]
+        },
+        "views": {
+            "byte-ai-sidebar": [
+                {
+                    "type": "webview",
+                    "id": "byteAI.chatView",
+                    "name": "Chat"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "byteAI.clearChat",
+                "title": "Clear Chat"
+            },
+            {
+                "command": "byteAI.explainCode",
+                "title": "Byte AI: Explain Selection"
+            },
+            {
+                "command": "byteAI.fixCode",
+                "title": "Byte AI: Fix Bugs"
+            },
+            {
+                "command": "byteAI.generateDocs",
+                "title": "Byte AI: Generate Docs"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "command": "byteAI.explainCode",
+                    "group": "byteAI",
+                    "when": "editorHasSelection"
+                },
+                {
+                    "command": "byteAI.fixCode",
+                    "group": "byteAI",
+                    "when": "editorHasSelection"
+                },
+                {
+                    "command": "byteAI.generateDocs",
+                    "group": "byteAI",
+                    "when": "editorHasSelection"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./"
+    },
+    "devDependencies": {
+        "@types/node": "18.x",
+        "@types/uuid": "^10.0.0",
+        "@types/vscode": "^1.85.0",
+        "@types/ws": "^8.18.1",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "uuid": "^9.0.1",
+        "ws": "^8.16.0"
+    }
+}
