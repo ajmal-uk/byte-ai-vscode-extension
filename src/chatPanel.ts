@@ -211,7 +211,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             </style>
         </head>
         <body>
-            <div class="chat-container" id="chat"></div>
+            <div class="chat-container" id="chat">
+                <div class="message assistant">
+                    <strong>👋 Hello! I am Byte Coder Ai Agent.</strong><br><br>
+                    I am ready to help you write code, fix bugs, and analyze your project.<br>
+                    Try commands like <code>/explain</code>, <code>/fix</code>, or just ask me anything!
+                </div>
+            </div>
             <div class="input-container">
                  <input type="text" id="input" placeholder="Ask Byte Coder Agent..." />
             </div>
