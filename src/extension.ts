@@ -48,6 +48,25 @@ export function activate(context: vscode.ExtensionContext) {
             provider.runCommand('doc');
         })
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('byteAI.quickAsk', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || editor.selection.isEmpty) {
+                vscode.window.showWarningMessage('Please select some code first.');
+                return;
+            }
+
+            const question = await vscode.window.showInputBox({
+                prompt: 'What would you like to know about this code?',
+                placeHolder: 'e.g., How does this function work?'
+            });
+
+            if (question) {
+                provider.quickAsk(question);
+            }
+        })
+    );
 }
 
 export function deactivate() { }

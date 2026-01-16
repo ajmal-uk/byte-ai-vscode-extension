@@ -173,6 +173,28 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         }
     }
 
+    public async quickAsk(question: string) {
+        if (!this._view) {
+            await vscode.commands.executeCommand('byteAI.chatView.focus');
+        }
+
+        const editor = vscode.window.activeTextEditor;
+        let text = "";
+        if (editor) {
+            const selection = editor.selection;
+            if (!selection.isEmpty) {
+                text = editor.document.getText(selection);
+            }
+        }
+
+        if (text) {
+            const message = `${question}\n\nCode:\n\`\`\`\n${text}\n\`\`\``;
+            this._view?.webview.postMessage({ type: 'setAndSendMessage', value: message });
+        } else {
+            this._view?.webview.postMessage({ type: 'setAndSendMessage', value: question });
+        }
+    }
+
     private async handleUserMessage(message: string) {
         if (!this._view) return;
 
@@ -506,7 +528,37 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     box-shadow: 0 0 0 2px var(--accent-hover), 0 4px 12px rgba(0,0,0,0.1); 
                 }
                 
+                /* Input Wrapper for Highlighting */
+                .input-wrapper {
+                    position: relative; width: 100%;
+                }
+                
+                .input-highlight {
+                    position: absolute; top: 0; left: 0; right: 0;
+                    pointer-events: none; white-space: pre-wrap; word-wrap: break-word;
+                    font-family: inherit; font-size: 14px; line-height: 1.4;
+                    padding: 4px 0; color: transparent;
+                    max-height: 200px; overflow: hidden;
+                }
+                
+                .input-highlight .mention {
+                    color: transparent;
+                    background: rgba(88, 166, 255, 0.35);
+                    border-radius: 4px; 
+                    padding: 1px 0px;
+                    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.35);
+                }
+                
+                .input-highlight .command {
+                    color: transparent;
+                    background: rgba(210, 168, 255, 0.35);
+                    border-radius: 4px; 
+                    padding: 1px 0px;
+                    box-shadow: 0 0 0 2px rgba(210, 168, 255, 0.35);
+                }
+
                 textarea {
+                    position: relative; z-index: 1;
                     width: 100%; border: none; background: transparent; color: var(--input-fg);
                     font-family: inherit; font-size: 14px; resize: none; outline: none;
                     max-height: 200px; min-height: 24px; padding: 4px 0; line-height: 1.4;
@@ -759,7 +811,10 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 
                 <div class="input-box">
                      <div class="file-popup" id="filePopup"></div>
-                    <textarea id="messageInput" placeholder="Ask anything, @ to mention, / for command..." rows="1"></textarea>
+                    <div class="input-wrapper">
+                        <div class="input-highlight" id="inputHighlight"></div>
+                        <textarea id="messageInput" placeholder="Ask anything, @ to mention, / for command..." rows="1"></textarea>
+                    </div>
                     <div class="input-actions">
                         <button class="btn-send" id="sendBtn" title="Send">${icons.send}</button>
                         <button class="btn-stop" id="stopBtn" title="Stop Generation">${icons.stop}</button>
@@ -771,6 +826,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 const vscode = acquireVsCodeApi();
                 const chatContainer = document.getElementById('chat-container');
                 const messageInput = document.getElementById('messageInput');
+                const inputHighlight = document.getElementById('inputHighlight');
                 const sendBtn = document.getElementById('sendBtn');
                 const stopBtn = document.getElementById('stopBtn');
                 const sessionDrawer = document.getElementById('session-drawer');
@@ -778,6 +834,22 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 const commandPopup = document.getElementById('commandPopup');
                 const filePopup = document.getElementById('filePopup');
                 const emptyState = document.getElementById('emptyState');
+                
+                // Update the highlight overlay with colored @mentions and /commands
+                function updateHighlight() {
+                    let text = messageInput.value;
+                    // Escape HTML to prevent XSS
+                    text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    // Highlight @mentions (blue) - match @word patterns immediately
+                    text = text.replace(/@([a-zA-Z0-9_./-]+)/g, '<span class="mention">@$1</span>');
+                    // Highlight /commands (purple) - match /word at start or after space, no trailing space needed
+                    text = text.replace(/(^|\\s)(\\/[a-zA-Z]+)/g, '$1<span class="command">$2</span>');
+                    // Set the highlighted HTML
+                    inputHighlight.innerHTML = text;
+                }
+                
+                // Initialize highlighting on page load
+                setTimeout(updateHighlight, 0);
                 
                 marked.setOptions({
                     highlight: function(code, lang) {
@@ -810,6 +882,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     this.style.height = 'auto';
                     this.style.height = (this.scrollHeight) + 'px';
                     if (this.value === '') this.style.height = '24px';
+                    
+                    // Update syntax highlighting
+                    updateHighlight();
                     
                     const val = this.value;
                     const cursorPos = this.selectionStart;
@@ -880,6 +955,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     // Set cursor position after the inserted command
                     const newPos = beforeSlash.length + cmd.length + 2;
                     messageInput.setSelectionRange(newPos, newPos);
+                    
+                    // Update highlighting immediately
+                    updateHighlight();
                 }
                 
                 function executeCommand(cmd) {
@@ -1284,6 +1362,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             // Set cursor position
                             const newPos = beforeAt.length + file.path.length + 2;
                             messageInput.setSelectionRange(newPos, newPos);
+                            
+                            // Update highlighting immediately
+                            updateHighlight();
                         };
                         filePopup.appendChild(div);
                     });

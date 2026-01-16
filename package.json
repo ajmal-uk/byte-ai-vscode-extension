@@ -106,6 +106,36 @@
             {
                 "command": "byteAI.generateDocs",
                 "title": "Byte AI: Generate Docs"
+            },
+            {
+                "command": "byteAI.quickAsk",
+                "title": "Byte AI: Quick Ask"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "byteAI.explainCode",
+                "key": "ctrl+alt+e",
+                "mac": "cmd+alt+e",
+                "when": "editorTextFocus && editorHasSelection"
+            },
+            {
+                "command": "byteAI.fixCode",
+                "key": "ctrl+alt+f",
+                "mac": "cmd+alt+f",
+                "when": "editorTextFocus && editorHasSelection"
+            },
+            {
+                "command": "byteAI.refactorCode",
+                "key": "ctrl+alt+r",
+                "mac": "cmd+alt+r",
+                "when": "editorTextFocus && editorHasSelection"
+            },
+            {
+                "command": "byteAI.quickAsk",
+                "key": "ctrl+alt+a",
+                "mac": "cmd+alt+a",
+                "when": "editorTextFocus && editorHasSelection"
             }
         ],
         "menus": {
