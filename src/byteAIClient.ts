@@ -68,6 +68,8 @@ export class ByteAIClient {
         - Follow best practices (SOLID, DRY, KISS).
         - Use modern syntax and features for the specific language.
         - ALWAYS add comments explaining *complex* logic, but avoid redundant comments for obvious code.
+        - **CODE FORMATTING (CRITICAL)**: NEVER place code statements on the same line as comments. Each statement must be on its own line. Comments should NOT hide or obscure any executable code.
+        - Ensure all code blocks are properly formatted with correct indentation and line breaks - each statement on a new line.
     
     2.  **UI/Design Excellence (CRITICAL)**:
         - If asked for UI/Web/Frontend code, you MUST generate **Stunning, Modern, and Premium** designs.

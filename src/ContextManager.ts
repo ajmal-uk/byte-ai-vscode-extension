@@ -300,8 +300,9 @@ export class ContextManager {
      * Add a conversation turn to memory
      */
     public addConversationTurn(role: 'user' | 'assistant', content: string): void {
-        const summary = content.length > 500
-            ? content.substring(0, 500) + '...'
+        const summaryLimit = 1500;
+        const summary = content.length > summaryLimit
+            ? content.substring(0, summaryLimit) + '...'
             : content;
         this.conversationContext.push(`${role}: ${summary}`);
 

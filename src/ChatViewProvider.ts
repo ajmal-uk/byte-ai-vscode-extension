@@ -314,6 +314,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         if (!this._view) return;
 
         try {
+            this._view?.webview.postMessage({ type: 'agentStatusReset' });
+            this._view?.webview.postMessage({
+                type: 'agentStatus',
+                phase: 'Analyzing',
+                message: 'Analyzing your request and recent context'
+            });
+
             this._history.push({ role: 'user', text: message });
             await this.saveCurrentSession();
 
@@ -322,13 +329,42 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 this._view.webview.postMessage({ type: 'setGenerating' }); // Show typing indicator
             }
 
-            // 1. Resolve Context from @mentions or auto-detect current file
             let contextMsg = message;
+            const conversationSummary = this._contextManager.getConversationSummary();
+            if (conversationSummary) {
+                contextMsg = conversationSummary + '\n\n' + contextMsg;
+            }
             const mentionRegex = /@([^\s]+)/g;
             const matches = message.match(mentionRegex);
 
+            const lowerMessage = message.toLowerCase();
+            const isFollowUp = lowerMessage.length < 120 && (
+                lowerMessage.startsWith('what is this') ||
+                lowerMessage.startsWith('what is that') ||
+                lowerMessage.startsWith('can you') ||
+                lowerMessage.startsWith('please') ||
+                lowerMessage.startsWith('and') ||
+                lowerMessage.includes('this code') ||
+                lowerMessage.includes('that code') ||
+                lowerMessage.includes('above code') ||
+                lowerMessage.includes('same code') ||
+                lowerMessage.includes('change this') ||
+                lowerMessage.includes('modify this') ||
+                lowerMessage.includes('make this') ||
+                lowerMessage.includes('in java') ||
+                lowerMessage.includes('in c++') ||
+                lowerMessage.includes('in python') ||
+                lowerMessage.includes('in typescript') ||
+                lowerMessage.includes('in ts') ||
+                lowerMessage.includes('in js')
+            );
+
             if (matches && matches.length > 0) {
-                // User explicitly mentioned files with @
+                this._view?.webview.postMessage({
+                    type: 'agentStatus',
+                    phase: 'Context',
+                    message: 'Resolving mentioned files and building context'
+                });
                 const files = await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**}');
                 let contextBlock = "\n\n--- CONTEXT ---\n";
                 let filesFound = 0;
@@ -416,20 +452,52 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 if (filesFound > 0) {
                     contextMsg += contextBlock;
                 }
-            } else if (vscode.workspace.getConfiguration('byteAI').get<boolean>('autoContext')) {
-                // No @ mentions - use SearchAgent to find relevant context
+            } else if (vscode.workspace.getConfiguration('byteAI').get<boolean>('autoContext') && !isFollowUp) {
+                this._view?.webview.postMessage({
+                    type: 'agentStatus',
+                    phase: 'Context',
+                    message: 'Gathering relevant project context'
+                });
                 const editor = vscode.window.activeTextEditor;
                 const activeFilePath = editor ? vscode.workspace.asRelativePath(editor.document.uri) : undefined;
 
-                // Always inject Project Map for general understanding if it's a broad query
                 const isBroadQuery = message.length < 50 || message.includes('project') || message.includes('files') || message.startsWith('/');
                 if (isBroadQuery) {
+                    this._view?.webview.postMessage({
+                        type: 'agentStatus',
+                        phase: 'Project map',
+                        message: 'Building project structure overview'
+                    });
                     const projectMap = await this._searchAgent.getProjectMap();
                     contextMsg += projectMap;
                 }
 
-                // Use SearchAgent to find relevant files
-                const searchContext = await this._searchAgent.search(message, activeFilePath);
+                this._view?.webview.postMessage({
+                    type: 'agentStatus',
+                    phase: 'Searching files',
+                    message: 'Searching files and code sections relevant to your request'
+                });
+
+                const searchContextRaw = await this._searchAgent.search(message, activeFilePath);
+                let searchContext = searchContextRaw;
+                if (searchContextRaw) {
+                    const debugEnabled = vscode.workspace.getConfiguration('byteAI').get<boolean>('debugSearchAgent');
+                    if (debugEnabled) {
+                        const startToken = '--- SEARCH DEBUG ---';
+                        const endToken = '--- END SEARCH DEBUG ---';
+                        const debugStart = searchContextRaw.indexOf(startToken);
+                        const debugEnd = searchContextRaw.indexOf(endToken);
+                        if (debugStart !== -1 && debugEnd !== -1 && debugEnd > debugStart) {
+                            const debugBlock = searchContextRaw.substring(debugStart, debugEnd + endToken.length);
+                            this._view?.webview.postMessage({
+                                type: 'agentDebugText',
+                                value: debugBlock
+                            });
+                            searchContext = searchContextRaw.slice(0, debugStart) +
+                                searchContextRaw.slice(debugEnd + endToken.length);
+                        }
+                    }
+                }
 
                 if (searchContext) {
                     contextMsg += searchContext;
@@ -457,10 +525,14 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 }
             }
 
-            // Track conversation for context continuity
             this._contextManager.addConversationTurn('user', message);
 
-            // Stream response
+            this._view?.webview.postMessage({
+                type: 'agentStatus',
+                phase: 'Answering',
+                message: 'Generating answer with gathered context'
+            });
+
             let fullResponse = "";
             await this._client.streamResponse(contextMsg, (chunk) => {
                 fullResponse += chunk;
@@ -473,10 +545,12 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             this._contextManager.addConversationTurn('assistant', fullResponse);
             this._view.webview.postMessage({ type: 'addResponse', value: fullResponse, isStream: false });
             await this.saveCurrentSession();
+            this._view?.webview.postMessage({ type: 'agentStatusDone' });
 
         } catch (error: any) {
             console.error('Chat Error:', error);
             this._view.webview.postMessage({ type: 'error', value: error.message || "Unknown error" });
+            this._view?.webview.postMessage({ type: 'agentStatusDone' });
         }
     }
 

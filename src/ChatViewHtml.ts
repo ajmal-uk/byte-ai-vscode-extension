@@ -156,10 +156,65 @@ export class ChatViewHtml {
                     background-image: var(--gradient-overlay);
                 }
 
-                /* Assistant Message */
                 .message.assistant { align-items: flex-start; width: 100%; }
                 .message.assistant .content {
-                    padding-left: 4px; color: var(--text-primary); width: 100%;
+                    background: transparent;
+                    border: none;
+                    padding: 4px 0;
+                    max-width: 100%;
+                    color: var(--text-primary);
+                }
+
+                /* Inline Thinking Indicator - Minimal Design */
+                .thinking-indicator {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 16px;
+                    background: rgba(59, 130, 246, 0.08);
+                    border-radius: 12px;
+                    border: 1px solid rgba(59, 130, 246, 0.2);
+                    animation: fadeIn 0.3s ease;
+                    max-width: fit-content;
+                }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(8px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                .thinking-dots {
+                    display: flex;
+                    gap: 4px;
+                }
+                
+                .thinking-dot {
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background: var(--accent);
+                    animation: dotPulse 1.4s ease-in-out infinite;
+                }
+                
+                .thinking-dot:nth-child(1) { animation-delay: 0s; }
+                .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+                .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+                
+                @keyframes dotPulse {
+                    0%, 80%, 100% { 
+                        opacity: 0.3;
+                        transform: scale(0.8);
+                    }
+                    40% { 
+                        opacity: 1;
+                        transform: scale(1);
+                    }
+                }
+                
+                .thinking-text {
+                    font-size: 13px;
+                    color: var(--accent);
+                    font-weight: 500;
                 }
 
                 /* Markdown Styles */
@@ -227,22 +282,10 @@ export class ChatViewHtml {
                     font-size: 13px; line-height: 1.5;
                 }
 
-                /* Typing Indicator */
+                /* Simple Typing Indicator - fallback */
                 .typing-indicator {
-                    padding: 12px 18px; background: var(--bg-hover);
-                    border-radius: 20px; border-bottom-left-radius: 4px;
-                    display: flex; gap: 5px; align-items: center;
-                    width: fit-content; margin-top: 8px;
-                    box-shadow: var(--shadow-sm);
+                    display: none;
                 }
-                .typing-dot {
-                    width: 6px; height: 6px; background: var(--accent); border-radius: 50%; opacity: 0.8;
-                    animation: bounce 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1) both;
-                    box-shadow: 0 0 8px var(--accent);
-                }
-                .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-                .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-                @keyframes bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
 
                 /* Input Section - Floating Style */
                 .input-section {
@@ -736,6 +779,8 @@ export class ChatViewHtml {
                 </div>
             </div>
 
+
+
             <div id="chat-container">
                 <div id="emptyState" class="empty-state">
                     <div class="empty-greeting">What can I help you build?</div>
@@ -837,6 +882,9 @@ export class ChatViewHtml {
                 const filePopup = document.getElementById('filePopup');
                 const emptyState = document.getElementById('emptyState');
                 
+                // Inline thinking indicator state
+                let thinkingIndicatorEl = null;
+                
                 // Update the highlight overlay with colored @mentions and /commands
                 function updateHighlight() {
                     let text = messageInput.value;
@@ -863,6 +911,61 @@ export class ChatViewHtml {
 
                 let isGenerating = false;
                 let currentAssistantMessageDiv = null;
+                
+                function createThinkingIndicator() {
+                    const wrapper = document.createElement('div');
+                    wrapper.id = 'thinkingIndicator';
+                    wrapper.className = 'message assistant';
+                    
+                    const indicator = document.createElement('div');
+                    indicator.className = 'thinking-indicator';
+                    indicator.innerHTML = \`
+                        <div class="thinking-dots">
+                            <span class="thinking-dot"></span>
+                            <span class="thinking-dot"></span>
+                            <span class="thinking-dot"></span>
+                        </div>
+                        <span class="thinking-text" id="thinkingText">Thinking...</span>
+                    \`;
+                    wrapper.appendChild(indicator);
+                    return wrapper;
+                }
+                
+                function showThinkingIndicator() {
+                    hideThinkingIndicator();
+                    thinkingIndicatorEl = createThinkingIndicator();
+                    chatContainer.appendChild(thinkingIndicatorEl);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                
+                function hideThinkingIndicator() {
+                    if (thinkingIndicatorEl) {
+                        thinkingIndicatorEl.remove();
+                        thinkingIndicatorEl = null;
+                    }
+                }
+                
+                function handleAgentStatus(phase, messageText) {
+                    if (!thinkingIndicatorEl) {
+                        showThinkingIndicator();
+                    }
+                    
+                    // Update the thinking text with current phase
+                    const textEl = thinkingIndicatorEl.querySelector('#thinkingText');
+                    if (textEl) {
+                        textEl.textContent = phase + '...';
+                    }
+                    
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                
+                function handleAgentDebugText(text) {
+                    console.log('Agent Debug:', text);
+                }
+                
+                function handleAgentStatusDone() {
+                    // Just hide the indicator when done - the response will replace it
+                }
                 
                 // Debounce utility
                 function debounce(fn, delay) {
@@ -933,28 +1036,19 @@ export class ChatViewHtml {
                     isGenerating = true;
                     updateUIState();
                     
-                    // Show typing indicator
-                    showTypingIndicator();
+                    // Show inline thinking indicator instead of simple dots
+                    showThinkingIndicator();
                     
                     vscode.postMessage({ type: 'sendMessage', value: text });
                 }
                 
                 function showTypingIndicator() {
-                    // Remove existing typing indicator
-                    const existing = document.getElementById('typingIndicator');
-                    if (existing) existing.remove();
-                    
-                    const indicator = document.createElement('div');
-                    indicator.id = 'typingIndicator';
-                    indicator.className = 'message assistant';
-                    indicator.innerHTML = '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
-                    chatContainer.appendChild(indicator);
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                    // Now uses the thinking indicator
+                    showThinkingIndicator();
                 }
                 
                 function hideTypingIndicator() {
-                    const indicator = document.getElementById('typingIndicator');
-                    if (indicator) indicator.remove();
+                    hideThinkingIndicator();
                 }
 
                 sendBtn.addEventListener('click', sendMessage);
@@ -1021,6 +1115,18 @@ export class ChatViewHtml {
                                 updateUIState();
                             }
                             break;
+                        
+                        case 'agentStatus':
+                            handleAgentStatus(message.phase, message.message);
+                            break;
+                        
+                        case 'agentDebugText':
+                            handleAgentDebugText(message.value);
+                            break;
+
+                        case 'agentStatusDone':
+                            handleAgentStatusDone();
+                            break;
                             
                         case 'setAndSendMessage':
                             messageInput.value = message.value;
@@ -1045,7 +1151,7 @@ export class ChatViewHtml {
                                      <div class="empty-subtitle">Ask me anything about your code, or try one of these quick actions</div>
                                      <div class="quick-actions">
                                          <div class="action-card" onclick="setInputValue('/explain ')">
-                                             <div class="action-icon">\${icons.refresh}</div>
+                                             <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
                                              <div class="action-title">Explain</div>
                                              <div class="action-desc">Analyze project logic</div>
                                          </div>
@@ -1055,7 +1161,7 @@ export class ChatViewHtml {
                                              <div class="action-desc">Debug & repair issues</div>
                                          </div>
                                          <div class="action-card" onclick="setInputValue('/refactor ')">
-                                              <div class="action-icon">\${icons.zap}</div>
+                                              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></div>
                                              <div class="action-title">Refactor</div>
                                              <div class="action-desc">Improve architecture</div>
                                          </div>
