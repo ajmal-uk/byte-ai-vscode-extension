@@ -5,9 +5,9 @@
     <b>The Ultimate Premium AI Coding Companion for VS Code</b>
   </p>
   
-  [![Version](https://img.shields.io/badge/version-1.3.0-blue.svg?style=for-the-badge&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=uthakkan.byte-coder-ai-agent)
-  [![Installs](https://img.shields.io/visual-studio-marketplace/i/uthakkan.byte-coder-ai-agent?style=for-the-badge&color=28a745)](https://marketplace.visualstudio.com/items?itemName=uthakkan.byte-coder-ai-agent)
-  [![License](https://img.shields.io/github/license/ajmal-uk/byte-coder-ai-agent?style=for-the-badge&color=orange)](LICENSE)
+  [![Version](https://img.shields.io/badge/version-1.2.0-blue.svg?style=for-the-badge&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=uthakkan.byte-coder-ai-agent)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/uthakkan.byte-coder-ai-agent?style=for-the-badge&color=28a745)](https://marketplace.visualstudio.com/items?itemName=uthakkan.byte-coder-ai-agent)
+[![License](https://img.shields.io/github/license/ajmal-uk/byte-coder-ai-agent?style=for-the-badge&color=orange)](LICENSE)
 </div>
 
 <br />
@@ -22,15 +22,16 @@ Byte Coder isn't just another AI extension. It is a **premium experience** desig
 
 ### 💎 Design Philosophy
 We believe developer tools should be beautiful and unobtrusive.
-- **Glassmorphism UI**: A stunning, translucent interface that adapts to your environment.
+- **Glassmorphism UI**: A stunning, translucent interface with ultra-blurred backgrounds.
+- **Subtle Textures**: A premium radial dot pattern provides depth without distraction.
 - **Dynamic Theming**: Seamlessly blends with Light, Dark, and High Contrast VS Code themes.
 - **Typography First**: Tuned font stacks using `Inter` and `JetBrains Mono` for superior readability.
 
 ### ⚡ Advanced Capabilities
+- **Wide Project Awareness**: Generates a hierarchical map of your entire workspace for holistic reasoning.
 - **Context-Aware**: Understands your workspace. Use **@ mentions** to reference files directly.
 - **Command Power**: Use **/** slash commands for rapid access to AI workflows.
 - **One-Click Actions**: Explain, Fix, Refactor, and Test with dedicated context menu items.
-- **Privacy Focused**: Your code stays yours. Secure, direct communication.
 
 ---
 
@@ -41,6 +42,7 @@ Interact with your codebase using natural language.
 - **File References**: Type `@` to select files and add them to context instantly.
 - **Slash Commands**: Type `/` to access quick actions like `/explain`, `/fix`, or `/clear`.
 - **Session History**: Never lose a thought. Access past conversations in a beautiful slide-out drawer.
+- **Scroll Memory**: A floating "Scroll to Bottom" action ensures you're always one click away from the latest response.
 
 ### 2. ⚡ Contextual Quick Actions
 Right-click any selection in your editor to access powerful AI tools:
@@ -52,9 +54,9 @@ Right-click any selection in your editor to access powerful AI tools:
 
 ### 3. 🎨 Adaptive UI
 The interface feels distinct yet native.
-- **Fluid Animations**: Smooth transitions for a responsive feel.
-- **Markdown Support**: Rich text rendering with syntax highlighting for code blocks.
-- **Responsive Layout**: Perfectly sized for any sidebar width.
+- **Fluid Animations**: Staggered entrance animations and smooth transitions.
+- **Markdown Support**: Rich text rendering with syntax highlighting and MacOS-style code headers.
+- **PRO Branding**: Refined header with a subtle gradient badge signaling advanced power.
 
 ---
 

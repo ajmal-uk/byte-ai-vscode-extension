@@ -29,15 +29,6 @@ export class ByteAIClient {
         return '';
     }
 
-    private getTemperatureInstruction(): string {
-        try {
-            const config = vscode.workspace.getConfiguration('byteAI');
-            const temp = config.get<number>('temperature') ?? 0.7;
-            if (temp <= 0.3) return "\n\n[STYLE: STRICT, DETERMINISTIC, CONCISE. Avoid fluff.]";
-            if (temp >= 0.8) return "\n\n[STYLE: CREATIVE, VERBOSE, EXPLORATORY. Offer alternatives.]";
-        } catch (e) { }
-        return "";
-    }
 
     private readonly SYSTEM_PROMPT = `You are Byte AI, an advanced AI coding assistant developed by UTHAKKAN.
 
@@ -90,7 +81,12 @@ export class ByteAIClient {
         - **Execute**: Provide the complete, working solution.
         - **Explain**: Briefly explain *why* you chose this solution (trade-offs, performance, etc.).
 
-    4.  **Tone**: 
+    4.  **Workspace Awareness**:
+        - You have visibility into the user's project structure via the "PROJECT STRUCTURE" block in the context.
+        - Use this to understand the project architecture, locate relevant files, and provide context-aware suggestions.
+        - If the user asks broad questions like "Explain this project", use the file structure to provide a high-level overview.
+
+    5.  **Tone**: 
         - Professional, Intelligent, Concise, and Helpful. 
         - Act like a Senior Partner to the user.
 
@@ -202,7 +198,7 @@ IF ASKED "Who developed you?", YOU MUST REPLY: "I was developed by Uthakkan, fou
                     const payload = {
                         chatId: this.chatId,
                         appId: this.appId,
-                        systemPrompt: this.SYSTEM_PROMPT + this.getTemperatureInstruction(),
+                        systemPrompt: this.SYSTEM_PROMPT + this.getCustomInstructions(),
                         message: identityContext + userInput + this.getCustomInstructions()
                     };
                     this._ws?.send(JSON.stringify(payload));

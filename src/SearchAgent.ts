@@ -326,4 +326,39 @@ export class SearchAgent {
 
         return contextResult;
     }
+
+    /**
+     * Get a hierarchical tree-view of the project structure
+     */
+    public async getProjectMap(): Promise<string> {
+        try {
+            const allFiles = await vscode.workspace.findFiles(
+                '**/*',
+                '{**/node_modules/**,**/.git/**,**/dist/**,**/out/**,**/build/**,**/.DS_Store}',
+                1000 // Limit to 1000 files for performance
+            );
+
+            if (allFiles.length === 0) return "No files found in workspace.";
+
+            const paths = allFiles.map(f => vscode.workspace.asRelativePath(f)).sort();
+
+            let map = '\n\n--- PROJECT STRUCTURE ---\n';
+            let currentPath: string[] = [];
+
+            for (const path of paths) {
+                const parts = path.split('/');
+                const fileName = parts.pop() || '';
+
+                // Show depth with indentation
+                let depth = parts.length;
+                map += '  '.repeat(depth) + '|- ' + fileName + '\n';
+            }
+
+            map += '--- END PROJECT STRUCTURE ---\n';
+            return map;
+        } catch (e) {
+            console.error('SearchAgent: Error generating project map', e);
+            return '';
+        }
+    }
 }

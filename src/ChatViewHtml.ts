@@ -63,7 +63,14 @@ export class ChatViewHtml {
                     height: 100vh;
                     display: flex; flex-direction: column;
                     overflow: hidden;
-                    background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.03), transparent 400px);
+                    background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 600px);
+                }
+                
+                body::before {
+                    content: ''; position: absolute; inset: 0;
+                    background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+                    background-size: 20px 20px; pointer-events: none; z-index: -1;
+                    opacity: 0.5;
                 }
 
                 /* Premium Scrollbar */
@@ -75,12 +82,11 @@ export class ChatViewHtml {
                 /* Glass Header */
                 header {
                     display: flex; justify-content: space-between; align-items: center;
-                    padding: 0 16px; height: 50px;
-                    border-bottom: 1px solid var(--border);
-                    background: var(--bg-app); position: sticky; top: 0; z-index: 10;
-                    backdrop-filter: blur(16px);
-                    -webkit-backdrop-filter: blur(16px);
-                    position: relative;
+                    padding: 0 16px; height: 52px;
+                    border-bottom: 1px solid var(--glass-border);
+                    background: rgba(30, 30, 30, 0.6); position: sticky; top: 0; z-index: 100;
+                    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+                    box-shadow: 0 4px 20px -5px rgba(0,0,0,0.3);
                 }
                 
                 header::after {
@@ -230,12 +236,13 @@ export class ChatViewHtml {
                     box-shadow: var(--shadow-sm);
                 }
                 .typing-dot {
-                    width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; opacity: 0.6;
-                    animation: bounce 1.4s infinite ease-in-out both;
+                    width: 6px; height: 6px; background: var(--accent); border-radius: 50%; opacity: 0.8;
+                    animation: bounce 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1) both;
+                    box-shadow: 0 0 8px var(--accent);
                 }
                 .typing-dot:nth-child(1) { animation-delay: -0.32s; }
                 .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-                @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+                @keyframes bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
 
                 /* Input Section - Floating Style */
                 .input-section {
@@ -271,15 +278,30 @@ export class ChatViewHtml {
                     max-height: 200px; overflow: hidden;
                 }
                 .input-highlight .mention {
-                    color: transparent; background: rgba(59, 130, 246, 0.2);
-                    border-radius: 4px; padding: 0 2px;
-                    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+                    color: transparent; background: rgba(0, 198, 255, 0.15);
+                    border-radius: 6px; padding: 0 6px;
+                    border: 1px solid rgba(0, 198, 255, 0.3);
                 }
                 .input-highlight .command {
-                    color: transparent; background: rgba(249, 115, 22, 0.2);
-                    border-radius: 4px; padding: 0 2px;
-                    box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.3);
+                    color: transparent; background: rgba(255, 127, 0, 0.15);
+                    border-radius: 6px; padding: 0 6px;
+                    border: 1px solid rgba(255, 127, 0, 0.3);
                 }
+                
+                /* Scroll to Bottom Button */
+                #scrollToBottomBtn {
+                    position: fixed; bottom: 100px; right: 24px;
+                    width: 38px; height: 38px; border-radius: 50%;
+                    background: var(--accent); color: white;
+                    border: none; cursor: pointer; display: none;
+                    align-items: center; justify-content: center;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    z-index: 90; backdrop-filter: blur(8px);
+                }
+                #scrollToBottomBtn:hover { transform: translateY(-4px) scale(1.1); box-shadow: var(--shadow-glow); }
+                #scrollToBottomBtn.show { display: flex; animation: bounceIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+                @keyframes bounceIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
                 textarea {
                     position: relative; z-index: 1;
@@ -437,14 +459,18 @@ export class ChatViewHtml {
                 @keyframes float { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-20px, 20px) scale(1.1); } }
 
                 .empty-greeting {
-                    font-size: 32px; font-weight: 800; 
+                    font-size: 36px; font-weight: 800; 
                     background: var(--gradient-primary); 
                     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                    margin-bottom: 16px; letter-spacing: -0.5px;
-                    filter: drop-shadow(0 4px 10px rgba(0, 114, 255, 0.2));
+                    margin-bottom: 12px; letter-spacing: -1px;
+                    filter: drop-shadow(0 4px 12px rgba(0, 114, 255, 0.25));
+                    animation: slideDown 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
                 }
+                @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+                
                 .empty-subtitle {
-                    font-size: 14px; color: var(--text-secondary); margin-bottom: 32px; max-width: 280px; line-height: 1.5;
+                    font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; max-width: 320px; line-height: 1.6;
+                    opacity: 0.8;
                 }
                 
                 .quick-actions {
@@ -457,30 +483,41 @@ export class ChatViewHtml {
                     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
                     position: relative; overflow: hidden;
                     backdrop-filter: blur(10px);
+                    animation: cardEnter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
                 }
+                .action-card:nth-child(1) { animation-delay: 0.1s; }
+                .action-card:nth-child(2) { animation-delay: 0.2s; }
+                .action-card:nth-child(3) { animation-delay: 0.3s; }
+                .action-card:nth-child(4) { animation-delay: 0.4s; }
+
+                @keyframes cardEnter {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
                 .action-card:hover { 
                     transform: translateY(-5px);
-                    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.2);
+                    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.3);
                     border-color: var(--accent);
-                    background: linear-gradient(180deg, var(--bg-hover) 0%, rgba(59, 130, 246, 0.05) 100%);
+                    background: linear-gradient(180deg, var(--bg-hover) 0%, rgba(0, 114, 255, 0.08) 100%);
                 }
                 
                 .action-icon {
                     width: 44px; height: 44px; border-radius: 12px;
-                    background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+                    background: linear-gradient(135deg, rgba(0,198,255,0.1), rgba(0,114,255,0.1));
                     color: var(--accent);
                     display: flex; align-items: center; justify-content: center; font-size: 20px;
                     transition: all 0.3s ease; box-shadow: 0 4px 6px -2px rgba(0,0,0,0.05);
                 }
                 .action-card:hover .action-icon { 
-                    transform: scale(1.1); 
-                    background: linear-gradient(135deg, var(--accent), #8b5cf6); 
+                    transform: scale(1.1) rotate(5deg); 
+                    background: var(--gradient-primary); 
                     color: white;
-                    box-shadow: 0 8px 12px -4px rgba(59, 130, 246, 0.4);
+                    box-shadow: 0 8px 15px -4px rgba(0, 114, 255, 0.4);
                 }
                 
                 .action-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
-                .action-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; font-weight: 500; }
+                .action-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; font-weight: 500; text-align: left; }
 
                 /* Command Popup Styling */
                 .command-popup {
@@ -640,6 +677,7 @@ export class ChatViewHtml {
             <header>
                 <div class="brand">
                     <img src="${logoUri}" class="logo-img" alt="Logo">
+                    <span style="font-size: 10px; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; border: 1px solid var(--accent); padding: 1px 4px; border-radius: 4px; margin-left: -2px; font-weight: 800; opacity: 0.9; letter-spacing: 0.5px;">PRO</span>
                 </div>
                 <div class="header-actions">
                     <button class="btn-icon" onclick="exportChat()" title="Export Chat">${icons.download}</button>
@@ -679,14 +717,6 @@ export class ChatViewHtml {
                         <textarea id="customInstructions" class="setting-input" rows="4" placeholder="E.g. You are an expert Python developer. Be concise."></textarea>
                     </div>
 
-                    <div class="setting-group">
-                        <div class="setting-label">CREATIVITY (Temperature)</div>
-                        <div class="setting-desc">Adjust response randomness (0.0 - 1.0).</div>
-                        <div class="range-container">
-                            <input type="range" id="tempSlider" min="0" max="1" step="0.1" value="0.7" oninput="updateTempLabel(this.value)">
-                            <span id="tempValue">0.7</span>
-                        </div>
-                    </div>
 
                     <div class="setting-group">
                          <div class="setting-row">
@@ -735,6 +765,10 @@ export class ChatViewHtml {
                 </div>
             </div>
 
+            <button id="scrollToBottomBtn" onclick="scrollToBottom()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"></path></svg>
+            </button>
+            
             <div class="input-section">
                 <div class="command-popup" id="commandPopup">
                     <div class="command-item" onclick="selectCommand('explain')">
@@ -1006,7 +1040,32 @@ export class ChatViewHtml {
                              chatContainer.innerHTML = '';
                              resetMessageIndex();
                              if (message.history.length === 0) {
-                                 chatContainer.innerHTML = '<div id="emptyState" class="empty-state"><div class="empty-greeting">What can I help you build?</div><div class="empty-subtitle">Ask me anything about your code, or try one of these quick actions</div><div class="quick-actions"><div class="action-card" onclick="executeCommand(\\'explain\\')"><div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div><div class="action-title">Explain</div><div class="action-desc">Understand code logic</div></div><div class="action-card" onclick="executeCommand(\\'fix\\')"><div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg></div><div class="action-title">Fix Bugs</div><div class="action-desc">Debug & repair issues</div></div><div class="action-card" onclick="executeCommand(\\'refactor\\')"><div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></div><div class="action-title">Refactor</div><div class="action-desc">Improve code quality</div></div><div class="action-card" onclick="executeCommand(\\'test\\')"><div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div><div class="action-title">Test</div><div class="action-desc">Generate unit tests</div></div></div></div>';
+                                 chatContainer.innerHTML = \`<div id="emptyState" class="empty-state">
+                                     <div class="empty-greeting">What can I help you build?</div>
+                                     <div class="empty-subtitle">Ask me anything about your code, or try one of these quick actions</div>
+                                     <div class="quick-actions">
+                                         <div class="action-card" onclick="setInputValue('/explain ')">
+                                             <div class="action-icon">\${icons.refresh}</div>
+                                             <div class="action-title">Explain</div>
+                                             <div class="action-desc">Analyze project logic</div>
+                                         </div>
+                                         <div class="action-card" onclick="setInputValue('/fix ')">
+                                              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg></div>
+                                             <div class="action-title">Fix Bugs</div>
+                                             <div class="action-desc">Debug & repair issues</div>
+                                         </div>
+                                         <div class="action-card" onclick="setInputValue('/refactor ')">
+                                              <div class="action-icon">\${icons.zap}</div>
+                                             <div class="action-title">Refactor</div>
+                                             <div class="action-desc">Improve architecture</div>
+                                         </div>
+                                         <div class="action-card" onclick="setInputValue('/test ')">
+                                             <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+                                             <div class="action-title">Test</div>
+                                             <div class="action-desc">Generate unit tests</div>
+                                         </div>
+                                     </div>
+                                 </div>\`;
                              } else {
                                  message.history.forEach(msg => {
                                      addMessage(msg.role, msg.text);
@@ -1140,22 +1199,23 @@ export class ChatViewHtml {
                         
                         const copyBtn = document.createElement('button');
                         copyBtn.className = 'copy-btn';
-                        copyBtn.innerHTML = '${icons.copy} Copy';
+                        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                        copyBtn.title = 'Copy Code';
                         copyBtn.onclick = () => {
                             vscode.postMessage({ type: 'copyCode', value: code.innerText });
-                            copyBtn.innerHTML = '${icons.check} Copied';
-                            setTimeout(() => copyBtn.innerHTML = '${icons.copy} Copy', 2000);
+                            copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#27c93f"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                            setTimeout(() => copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>', 2000);
                         };
                         actions.appendChild(copyBtn);
                         
                         const insertBtn = document.createElement('button');
                         insertBtn.className = 'copy-btn';
-                        insertBtn.innerHTML = '${icons.zap} Insert';
-                        insertBtn.title = 'Insert code at cursor in editor';
+                        insertBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>';
+                        insertBtn.title = 'Insert at Cursor';
                         insertBtn.onclick = () => {
                             vscode.postMessage({ type: 'insertCode', value: code.innerText });
-                            insertBtn.innerHTML = '${icons.check} Inserted';
-                            setTimeout(() => insertBtn.innerHTML = '${icons.zap} Insert', 2000);
+                            insertBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#27c93f"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                            setTimeout(() => insertBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>', 2000);
                         };
                         actions.appendChild(insertBtn);
                         
@@ -1440,19 +1500,44 @@ export class ChatViewHtml {
                 window.saveSettings = () => {
                     const settings = {
                         customInstructions: document.getElementById('customInstructions').value,
-                        temperature: parseFloat(document.getElementById('tempSlider').value),
                         autoContext: document.getElementById('autoContext').checked
                     };
                     vscode.postMessage({ type: 'saveSettings', value: settings });
                     document.getElementById('settings-drawer').classList.remove('open');
                 };
 
-                window.updateTempLabel = (val) => {
-                    document.getElementById('tempValue').innerText = val;
+                window.scrollToBottom = () => {
+                    chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
                 };
+
+                chatContainer.addEventListener('scroll', () => {
+                    const btn = document.getElementById('scrollToBottomBtn');
+                    if (!btn) return;
+                    if (chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight > 800) {
+                        btn.classList.add('show');
+                    } else {
+                        btn.classList.remove('show');
+                    }
+                });
 
                 window.executeCommand = (cmd) => {
                     vscode.postMessage({ type: 'executeCommand', command: cmd });
+                };
+
+                window.setInputValue = (val) => {
+                    messageInput.value = val;
+                    // Trigger auto-resize
+                    messageInput.style.height = 'auto';
+                    messageInput.style.height = (messageInput.scrollHeight) + 'px';
+                    messageInput.focus();
+                    updateHighlight();
+                    
+                    // Add subtle click feedback
+                    const el = event?.currentTarget;
+                    if (el) {
+                        el.style.transform = 'scale(0.95)';
+                        setTimeout(() => el.style.transform = '', 100);
+                    }
                 };
 
                 // Toast Helper

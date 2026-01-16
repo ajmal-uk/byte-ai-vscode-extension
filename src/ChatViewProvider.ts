@@ -421,6 +421,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 const editor = vscode.window.activeTextEditor;
                 const activeFilePath = editor ? vscode.workspace.asRelativePath(editor.document.uri) : undefined;
 
+                // Always inject Project Map for general understanding if it's a broad query
+                const isBroadQuery = message.length < 50 || message.includes('project') || message.includes('files') || message.startsWith('/');
+                if (isBroadQuery) {
+                    const projectMap = await this._searchAgent.getProjectMap();
+                    contextMsg += projectMap;
+                }
+
                 // Use SearchAgent to find relevant files
                 const searchContext = await this._searchAgent.search(message, activeFilePath);
 
@@ -621,7 +628,6 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         const config = vscode.workspace.getConfiguration('byteAI');
         const settings = {
             customInstructions: config.get<string>('customInstructions'),
-            temperature: config.get<number>('temperature'),
             autoContext: config.get<boolean>('autoContext')
         };
         this._view?.webview.postMessage({ type: 'updateSettings', value: settings });
@@ -630,7 +636,6 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     private async handleSaveSettings(settings: any) {
         const config = vscode.workspace.getConfiguration('byteAI');
         await config.update('customInstructions', settings.customInstructions, vscode.ConfigurationTarget.Global);
-        await config.update('temperature', settings.temperature, vscode.ConfigurationTarget.Global);
         await config.update('autoContext', settings.autoContext, vscode.ConfigurationTarget.Global);
         await this.handleGetSettings();
     }
