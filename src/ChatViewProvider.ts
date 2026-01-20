@@ -370,7 +370,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 userMsgText = lastUserMsg.text;
                 files = lastUserMsg.files || [];
                 commands = lastUserMsg.commands || [];
-                // do not pop user message, just re-run response generation
+                // Remove user message as it will be re-added by handleUserMessage
+                this._history.pop();
             }
         }
 

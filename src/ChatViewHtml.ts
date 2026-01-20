@@ -56,17 +56,29 @@ export class ChatViewHtml {
                     
                     /* Tag Colors */
                     --tag-file-bg: rgba(56, 189, 248, 0.15);
+                    --tag-file-bg-hover: rgba(56, 189, 248, 0.25);
                     --tag-file-border: rgba(56, 189, 248, 0.3);
                     --tag-file-text: #38bdf8;
+                    --tag-file-shadow: rgba(56, 189, 248, 0.2);
                     
                     --tag-cmd-bg: rgba(216, 180, 254, 0.15);
+                    --tag-cmd-bg-hover: rgba(216, 180, 254, 0.25);
                     --tag-cmd-border: rgba(216, 180, 254, 0.3);
                     --tag-cmd-text: #d8b4fe;
+                    --tag-cmd-shadow: rgba(216, 180, 254, 0.2);
                     
                     /* Font Fallbacks */
                     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
                 }
 
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+                .rotating {
+                    animation: spin 1s linear infinite;
+                }
+                
                 body.vscode-light {
                     --glass-bg: rgba(255, 255, 255, 0.85);
                     --glass-border: rgba(0, 0, 0, 0.1);
@@ -77,12 +89,16 @@ export class ChatViewHtml {
                     
                     /* Tag Colors Light */
                     --tag-file-bg: rgba(2, 132, 199, 0.1);
+                    --tag-file-bg-hover: rgba(2, 132, 199, 0.2);
                     --tag-file-border: rgba(2, 132, 199, 0.2);
                     --tag-file-text: #0284c7;
+                    --tag-file-shadow: rgba(2, 132, 199, 0.15);
                     
                     --tag-cmd-bg: rgba(147, 51, 234, 0.1);
+                    --tag-cmd-bg-hover: rgba(147, 51, 234, 0.2);
                     --tag-cmd-border: rgba(147, 51, 234, 0.2);
                     --tag-cmd-text: #9333ea;
+                    --tag-cmd-shadow: rgba(147, 51, 234, 0.15);
                 }
 
                 body {
@@ -825,9 +841,9 @@ export class ChatViewHtml {
                     max-width: 100%;
                 }
                 .file-tag:hover { 
-                    background: rgba(56, 189, 248, 0.25); 
+                    background: var(--tag-file-bg-hover); 
                     transform: translateY(-1px);
-                    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.2);
+                    box-shadow: 0 2px 8px var(--tag-file-shadow);
                 }
                 .file-tag .tag-icon { opacity: 1; }
                 .file-tag .tag-text { 
@@ -838,7 +854,7 @@ export class ChatViewHtml {
                     margin-left: 2px; opacity: 0.7; padding: 2px; border-radius: 4px; display: flex;
                 }
                 .file-tag .close:hover { 
-                    opacity: 1; background: rgba(56, 189, 248, 0.3); color: white;
+                    opacity: 1; background: var(--tag-file-border); color: white;
                 }
                 
                 .command-tag {
@@ -847,9 +863,9 @@ export class ChatViewHtml {
                     color: var(--tag-cmd-text) !important;
                 }
                 .command-tag:hover {
-                    background: var(--tag-cmd-bg) !important;
+                    background: var(--tag-cmd-bg-hover) !important;
                     filter: brightness(1.1);
-                    box-shadow: 0 2px 8px rgba(216, 180, 254, 0.2);
+                    box-shadow: 0 2px 8px var(--tag-cmd-shadow);
                 }
                 .command-tag .close:hover {
                     background: var(--tag-cmd-border) !important;
@@ -872,9 +888,9 @@ export class ChatViewHtml {
                     font-weight: 500;
                 }
                 .message .file-tag:hover {
-                    background: rgba(56, 189, 248, 0.25);
+                    background: var(--tag-file-bg-hover);
                     text-decoration: underline;
-                    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.2);
+                    box-shadow: 0 2px 8px var(--tag-file-shadow);
                 }
 
             </style>
@@ -1630,6 +1646,11 @@ export class ChatViewHtml {
                              hideThinkingIndicator();
                              currentAssistantMessageDiv = null;
                              currentAssistantMessageIndex = null;
+                             
+                             // Hide scroll button on new session load
+                             const scrollBtn = document.getElementById('scrollToBottomBtn');
+                             if (scrollBtn) scrollBtn.classList.remove('show');
+
                              if (message.history.length === 0) {
                                  chatContainer.innerHTML = '';
                                  document.body.classList.add('new-chat');
@@ -1682,6 +1703,7 @@ export class ChatViewHtml {
                 let messageHistory = [];
                 
                 function addMessage(role, text, files = [], commands = []) {
+                    document.body.classList.remove('new-chat');
                     const currentIdx = messageIndex++;
                     messageHistory.push({ role, text, files, commands });
                     const div = document.createElement('div');
@@ -1758,7 +1780,8 @@ export class ChatViewHtml {
                         regenBtn.innerHTML = '${icons.refresh}';
                         regenBtn.title = 'Regenerate';
                         regenBtn.onclick = () => {
-                            vscode.postMessage({ type: 'regenerate', index: currentIdx });
+                            regenBtn.classList.add('rotating');
+                            vscode.postMessage({ type: 'regenerate', index: Number(currentIdx) });
                         };
                         actionsDiv.appendChild(regenBtn);
                     } else {
@@ -2210,7 +2233,16 @@ export class ChatViewHtml {
                 chatContainer.addEventListener('scroll', () => {
                     const btn = document.getElementById('scrollToBottomBtn');
                     if (!btn) return;
-                    if (chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight > 800) {
+                    
+                    const scrollHeight = chatContainer.scrollHeight;
+                    const scrollTop = chatContainer.scrollTop;
+                    const clientHeight = chatContainer.clientHeight;
+                    const distance = scrollHeight - scrollTop - clientHeight;
+
+                    // Only show if:
+                    // 1. We are significantly up (more than 300px)
+                    // 2. There is actual scrollable content
+                    if (distance > 300 && scrollHeight > clientHeight) {
                         btn.classList.add('show');
                     } else {
                         btn.classList.remove('show');
