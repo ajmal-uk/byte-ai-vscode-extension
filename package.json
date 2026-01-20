@@ -274,7 +274,7 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
+        "vscode:prepublish": "tsc -p ./",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./"
     },

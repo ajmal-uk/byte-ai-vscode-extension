@@ -63,16 +63,8 @@ export class ChatViewHtml {
                     height: 100vh;
                     display: flex; flex-direction: column;
                     overflow: hidden;
-                    background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.05), transparent 600px);
                 }
                 
-                body::before {
-                    content: ''; position: absolute; inset: 0;
-                    background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-                    background-size: 20px 20px; pointer-events: none; z-index: -1;
-                    opacity: 0.5;
-                }
-
                 /* Premium Scrollbar */
                 ::-webkit-scrollbar { width: 6px; height: 6px; }
                 ::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.2); border-radius: 3px; }
@@ -89,12 +81,6 @@ export class ChatViewHtml {
                     box-shadow: 0 4px 20px -5px rgba(0,0,0,0.3);
                 }
                 
-                header::after {
-                    content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
-                    height: 1px;
-                    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-                    opacity: 0.6;
-                }
 
                 .brand {
                     font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 10px;
@@ -105,7 +91,6 @@ export class ChatViewHtml {
                 }
                 .logo-img { 
                     width: 24px; height: 24px; object-fit: contain; 
-                    filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.25)); 
                     transition: transform 0.3s ease;
                 }
                 .brand:hover .logo-img { transform: rotate(10deg) scale(1.05); }
@@ -136,7 +121,7 @@ export class ChatViewHtml {
 
                 /* Messages */
                 .message { 
-                    display: flex; flex-direction: column; gap: 6px; 
+                    display: flex; gap: 8px; /* changed from column to row (implicit) */
                     max-width: 100%; 
                     animation: slideIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); 
                 }
@@ -144,8 +129,12 @@ export class ChatViewHtml {
                 
                 .content { position: relative; font-size: 14px; line-height: 1.6; word-wrap: break-word; }
                 
-                /* User Message */
-                .message.user { align-items: flex-end; }
+                /* User Message - Row Reverse to put actions on left */
+                .message.user { 
+                    flex-direction: row-reverse; 
+                    align-items: flex-end; 
+                    justify-content: flex-start; /* content starts from right */
+                }
                 .message.user .content {
                     background: var(--accent); color: var(--accent-foreground);
                     padding: 12px 18px; border-radius: 18px;
@@ -156,7 +145,42 @@ export class ChatViewHtml {
                     background-image: var(--gradient-overlay);
                 }
 
-                .message.assistant { align-items: flex-start; width: 100%; }
+                /* Assistant Message - Column (Text top, Actions bottom) */
+                .message.assistant { 
+                    flex-direction: column; 
+                    align-items: flex-start; 
+                    width: 100%; 
+                }
+                
+                /* New Action Button Styles */
+                .msg-actions {
+                    display: flex; gap: 6px;
+                    opacity: 0; transition: opacity 0.2s;
+                }
+                
+                /* User Actions: Centered vertically on side */
+                .message.user .msg-actions {
+                    align-self: center;
+                }
+
+                /* Assistant Actions: Bottom of bubble */
+                .message.assistant .msg-actions {
+                     margin-top: 6px;
+                     margin-left: 2px;
+                     position: static; transform: none;
+                }
+                 .message:hover .msg-actions { opacity: 1; }
+
+                .btn-icon.action-btn {
+                    width: 28px; height: 28px; background: var(--bg-app); 
+                    border: 1px solid var(--border); color: var(--text-secondary);
+                    box-shadow: var(--shadow-sm);
+                }
+                .btn-icon.action-btn:hover {
+                    background: var(--bg-hover); color: var(--text-primary);
+                    transform: scale(1.1);
+                }
+
                 .message.assistant .content {
                     background: transparent;
                     border: none;
@@ -291,7 +315,26 @@ export class ChatViewHtml {
                 .input-section {
                     padding: 20px; background: transparent;
                     position: relative; z-index: 20;
+                    margin-top: auto; /* Push to bottom by default */
+                    transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
                 }
+
+                /* New Chat State - Centered Input */
+                body.new-chat .input-section {
+                    position: absolute;
+                    top: 50%; left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 100%;
+                    max-width: 600px;
+                    padding: 0 32px;
+                    box-sizing: border-box;
+                }
+                
+                body.new-chat #chat-container {
+                    opacity: 0;
+                    pointer-events: none;
+                }
+
                 /* Gradient Mask for scroll transition */
                 .input-section::before {
                     content: ''; position: absolute; inset: 0;
@@ -301,6 +344,13 @@ export class ChatViewHtml {
                     backdrop-filter: blur(8px);
                     z-index: -1;
                     border-top: 1px solid var(--border);
+                    opacity: 1;
+                    transition: opacity 0.3s;
+                }
+                
+                body.new-chat .input-section::before {
+                    opacity: 0; /* No background in centered mode */
+                    border-top: none;
                 }
 
                 .input-box {
@@ -357,21 +407,32 @@ export class ChatViewHtml {
                 
                 .btn-send {
                     background: var(--accent); color: white; border: none;
-                    border-radius: 10px; width: 34px; height: 34px;
+                    border-radius: 12px; width: 40px; height: 40px;
                     cursor: pointer; display: flex; align-items: center; justify-content: center;
                     transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-                    box-shadow: var(--shadow-sm);
+                    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
                 }
-                .btn-send:hover { background: var(--accent-hover); transform: scale(1.1) rotate(-10deg); box-shadow: var(--shadow-glow); }
+                .btn-send:hover { 
+                    background: var(--accent-hover); 
+                    transform: scale(1.05); 
+                    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3); 
+                }
+                .btn-send:active { transform: scale(0.95); }
                 .btn-send span { display: none; }
 
                 .btn-stop {
                     background: #ef4444; color: white; border: none;
-                    border-radius: 10px; width: 34px; height: 34px;
+                    border-radius: 12px; width: 40px; height: 40px;
                     cursor: pointer; display: none; align-items: center; justify-content: center;
                     transition: all 0.2s;
+                    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
                 }
-                .btn-stop:hover { background: #dc2626; transform: scale(1.05); }
+                .btn-stop:hover { 
+                    background: #dc2626; 
+                    transform: scale(1.05);
+                    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
+                }
+                .btn-stop:active { transform: scale(0.95); }
 
                 /* Session Drawer - Full Window Overlay */
                 #session-drawer {
@@ -473,6 +534,20 @@ export class ChatViewHtml {
                 .btn-session-action:hover { background: var(--bg-hover); color: var(--text-primary); }
                 .btn-session-action.delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
                 
+                .empty-greeting {
+                     font-size: 24px; font-weight: 700;
+                     color: var(--text-primary);
+                     margin-bottom: 8px;
+                     text-align: center;
+                     opacity: 0.9;
+                }
+                .empty-subtitle {
+                     font-size: 14px;
+                     color: var(--text-secondary);
+                     text-align: center;
+                     margin-bottom: 24px;
+                }
+                
                 .drawer-footer { padding: 16px; border-top: 1px solid var(--border); background: var(--bg-app); }
                 .btn-clear {
                     width: 100%; border: 1px solid var(--border); color: #ef4444; background: transparent;
@@ -491,76 +566,8 @@ export class ChatViewHtml {
                     position: relative;
                 }
                 
-                /* Floating Particles Background */
-                .empty-state::before {
-                    content: ''; position: absolute; width: 200px; height: 200px;
-                    background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
-                    border-radius: 50%; filter: blur(40px);
-                    animation: float 10s infinite ease-in-out;
-                    z-index: -1;
-                }
-                @keyframes float { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-20px, 20px) scale(1.1); } }
+                /* Action Cards Removed */
 
-                .empty-greeting {
-                    font-size: 36px; font-weight: 800; 
-                    background: var(--gradient-primary); 
-                    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-                    margin-bottom: 12px; letter-spacing: -1px;
-                    filter: drop-shadow(0 4px 12px rgba(0, 114, 255, 0.25));
-                    animation: slideDown 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-                }
-                @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-                
-                .empty-subtitle {
-                    font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; max-width: 320px; line-height: 1.6;
-                    opacity: 0.8;
-                }
-                
-                .quick-actions {
-                    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 360px;
-                }
-                .action-card {
-                    background: var(--bg-hover); border: 1px solid var(--border);
-                    border-radius: 16px; padding: 20px; cursor: pointer;
-                    display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-                    position: relative; overflow: hidden;
-                    backdrop-filter: blur(10px);
-                    animation: cardEnter 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-                }
-                .action-card:nth-child(1) { animation-delay: 0.1s; }
-                .action-card:nth-child(2) { animation-delay: 0.2s; }
-                .action-card:nth-child(3) { animation-delay: 0.3s; }
-                .action-card:nth-child(4) { animation-delay: 0.4s; }
-
-                @keyframes cardEnter {
-                    from { opacity: 0; transform: translateY(20px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-
-                .action-card:hover { 
-                    transform: translateY(-5px);
-                    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.3);
-                    border-color: var(--accent);
-                    background: linear-gradient(180deg, var(--bg-hover) 0%, rgba(0, 114, 255, 0.08) 100%);
-                }
-                
-                .action-icon {
-                    width: 44px; height: 44px; border-radius: 12px;
-                    background: linear-gradient(135deg, rgba(0,198,255,0.1), rgba(0,114,255,0.1));
-                    color: var(--accent);
-                    display: flex; align-items: center; justify-content: center; font-size: 20px;
-                    transition: all 0.3s ease; box-shadow: 0 4px 6px -2px rgba(0,0,0,0.05);
-                }
-                .action-card:hover .action-icon { 
-                    transform: scale(1.1) rotate(5deg); 
-                    background: var(--gradient-primary); 
-                    color: white;
-                    box-shadow: 0 8px 15px -4px rgba(0, 114, 255, 0.4);
-                }
-                
-                .action-title { font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 4px; }
-                .action-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; font-weight: 500; text-align: left; }
 
                 /* Command Popup Styling */
                 .command-popup {
@@ -839,32 +846,7 @@ export class ChatViewHtml {
 
 
             <div id="chat-container">
-                <div id="emptyState" class="empty-state">
-                    <div class="empty-greeting">What can I help you build?</div>
-                    <div class="empty-subtitle">Ask me anything about your code, or try one of these quick actions</div>
-                    <div class="quick-actions">
-                        <div class="action-card" onclick="executeCommand('explain')">
-                            <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
-                            <div class="action-title">Explain</div>
-                            <div class="action-desc">Understand code logic</div>
-                        </div>
-                        <div class="action-card" onclick="executeCommand('fix')">
-                            <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg></div>
-                            <div class="action-title">Fix Bugs</div>
-                            <div class="action-desc">Debug & repair issues</div>
-                        </div>
-                        <div class="action-card" onclick="executeCommand('refactor')">
-                            <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></div>
-                            <div class="action-title">Refactor</div>
-                            <div class="action-desc">Improve code quality</div>
-                        </div>
-                        <div class="action-card" onclick="executeCommand('test')">
-                            <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg></div>
-                            <div class="action-title">Test</div>
-                            <div class="action-desc">Generate unit tests</div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Chat messages will appear here -->
             </div>
 
             <button id="scrollToBottomBtn" onclick="scrollToBottom()">
@@ -909,7 +891,9 @@ export class ChatViewHtml {
                         <textarea id="messageInput" placeholder="Ask anything, @ to mention, / for command..." rows="1"></textarea>
                     </div>
                     <div class="input-actions">
-                        <button class="btn-send" id="sendBtn" title="Send">${icons.send}</button>
+                        <button class="btn-send" id="sendBtn" title="Send">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                        </button>
                         <button class="btn-stop" id="stopBtn" title="Stop Generation">${icons.stop}</button>
                     </div>
                 </div>
@@ -1150,6 +1134,8 @@ export class ChatViewHtml {
                     commandPopup.classList.remove('show');
                     filePopup.classList.remove('show');
                     
+                    document.body.classList.remove('new-chat');
+                    
                     isGenerating = true;
                     updateUIState();
                     
@@ -1337,33 +1323,10 @@ export class ChatViewHtml {
                              currentAssistantMessageDiv = null;
                              currentAssistantMessageIndex = null;
                              if (message.history.length === 0) {
-                                 chatContainer.innerHTML = \`<div id="emptyState" class="empty-state">
-                                     <div class="empty-greeting">Byte Ai Agent</div>
-                                     <div class="empty-subtitle">Ask me anything about your code, or try one of these quick actions</div>
-                                     <div class="quick-actions">
-                                         <div class="action-card" onclick="setInputValue('/explain ')">
-                                             <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
-                                             <div class="action-title">Explain</div>
-                                             <div class="action-desc">Analyze project logic</div>
-                                         </div>
-                                         <div class="action-card" onclick="setInputValue('/fix ')">
-                                              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg></div>
-                                             <div class="action-title">Fix Bugs</div>
-                                             <div class="action-desc">Debug & repair issues</div>
-                                         </div>
-                                         <div class="action-card" onclick="setInputValue('/refactor ')">
-                                              <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></div>
-                                             <div class="action-title">Refactor</div>
-                                             <div class="action-desc">Improve architecture</div>
-                                         </div>
-                                         <div class="action-card" onclick="setInputValue('/test ')">
-                                             <div class="action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
-                                             <div class="action-title">Test</div>
-                                             <div class="action-desc">Generate unit tests</div>
-                                         </div>
-                                     </div>
-                                 </div>\`;
+                                 chatContainer.innerHTML = '';
+                                 document.body.classList.add('new-chat');
                              } else {
+                                 document.body.classList.remove('new-chat');
                                  message.history.forEach(msg => {
                                      addMessage(msg.role, msg.text);
                                  });
@@ -1426,14 +1389,27 @@ export class ChatViewHtml {
                     // Add Action Buttons
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'msg-actions';
-                    actionsDiv.style.cssText = 'display:flex; gap:8px; margin-top:4px; opacity:0; transition:opacity 0.2s;';
-
+                    
                     if (role === 'assistant') {
+                        // Copy Button
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'btn-icon action-btn';
+                        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                        copyBtn.title = 'Copy Response';
+                        copyBtn.onclick = () => {
+                            vscode.postMessage({ type: 'copyCode', value: text });
+                            // temporary success state
+                            const original = copyBtn.innerHTML;
+                            copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#27c93f"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                            setTimeout(() => copyBtn.innerHTML = original, 2000);
+                        };
+                        actionsDiv.appendChild(copyBtn);
+
                         // Regenerate Button
                         const regenBtn = document.createElement('button');
-                        regenBtn.className = 'btn-icon';
+                        regenBtn.className = 'btn-icon action-btn';
                         regenBtn.innerHTML = '${icons.refresh}';
-                        regenBtn.title = 'Regenerate this response';
+                        regenBtn.title = 'Regenerate';
                         regenBtn.onclick = () => {
                             vscode.postMessage({ type: 'regenerate', index: currentIdx });
                         };
@@ -1441,9 +1417,9 @@ export class ChatViewHtml {
                     } else {
                         // Edit Button
                         const editBtn = document.createElement('button');
-                        editBtn.className = 'btn-icon';
+                        editBtn.className = 'btn-icon action-btn';
                         editBtn.innerHTML = '${icons.edit}';
-                        editBtn.title = 'Edit and resend from here';
+                        editBtn.title = 'Edit';
                         editBtn.onclick = () => {
                             vscode.postMessage({ type: 'editMessage', index: currentIdx });
                         };
@@ -1491,9 +1467,12 @@ export class ChatViewHtml {
                 if (initialState && Array.isArray(initialState.messages) && initialState.messages.length > 0) {
                     chatContainer.innerHTML = '';
                     resetMessageIndex();
+                    document.body.classList.remove('new-chat');
                     initialState.messages.forEach(msg => {
                         addMessage(msg.role, msg.text);
                     });
+                } else {
+                    document.body.classList.add('new-chat');
                 }
 
                 if (initialState && typeof initialState.inputValue === 'string' && initialState.inputValue.length > 0) {
@@ -1585,6 +1564,13 @@ export class ChatViewHtml {
                         const div = document.createElement('div');
                         div.className = 'file-item';
                         if (index === filePopupSelectedIndex) div.classList.add('selected');
+
+                        // Sync Selection on Hover
+                        div.onmouseenter = () => {
+                            filePopupSelectedIndex = index;
+                            Array.from(filePopup.children).forEach(child => child.classList.remove('selected'));
+                            div.classList.add('selected');
+                        };
 
                         // Determine Icon
                         const ext = file.path.split('.').pop().toLowerCase();
