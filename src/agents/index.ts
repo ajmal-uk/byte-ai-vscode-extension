@@ -25,3 +25,6 @@ export { ExecutorAgent, ExecutorInput, ExecutorOutput } from './ExecutorAgent';
 // ===== SAFETY LAYER =====
 export { VersionControllerAgent, VersionControllerInput, VersionControllerResult } from './VersionControllerAgent';
 export { DocWriterAgent, DocWriterInput, DocWriterResult } from './DocWriterAgent';
+
+// ===== MEMORY LAYER =====
+export { LongTermMemory, MemoryEntry, MemorySearchResult } from './LongTermMemory';

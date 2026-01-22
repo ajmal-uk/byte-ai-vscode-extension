@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ManagerAgent } from './ManagerAgent';
-import { ManagerDecision, AgentOutput } from './AgentTypes';
+import { ManagerDecision, AgentOutput, CodeModification } from './AgentTypes';
 import { ExecutorAgent, ExecutorOutput } from '../agents/ExecutorAgent';
 import { VersionControllerAgent } from '../agents/VersionControllerAgent';
 import { CodeModifierAgent, CodeModifierResult } from '../agents/CodeModifierAgent';
@@ -16,9 +16,10 @@ import { ContextSearchAgent } from '../agents/ContextSearchAgent';
 import { ProcessPlannerAgent, ProcessPlannerResult } from '../agents/ProcessPlannerAgent';
 import { CodePlannerAgent, CodePlannerResult } from '../agents/CodePlannerAgent';
 import { TaskPlannerAgent, TaskPlannerResult } from '../agents/TaskPlannerAgent';
+import { SearchAgent } from '../SearchAgent';
 
 export interface AgenticAction {
-    type: 'create_file' | 'modify_file' | 'run_command' | 'create_directory' | 'delete_file';
+    type: 'create_file' | 'modify_file' | 'run_command' | 'create_directory' | 'delete_file' | 'partial_edit';
     path?: string;
     content?: string;
     command?: string;
@@ -33,11 +34,16 @@ export interface AgenticResult {
 }
 
 export interface ParsedInstruction {
-    type: 'create_file' | 'create_folder' | 'run_command' | 'modify_file' | 'explanation';
+    type: 'create_file' | 'create_folder' | 'run_command' | 'modify_file' | 'delete_file' | 'partial_edit' | 'explanation';
     path?: string;
     content?: string;
     command?: string;
     language?: string;
+    // For partial_edit: surgical edits
+    searchContent?: string;  // Content to find
+    replaceContent?: string; // Content to replace with
+    startLine?: number;      // Line range start
+    endLine?: number;        // Line range end
 }
 
 export class AgentOrchestrator {
@@ -50,7 +56,13 @@ export class AgentOrchestrator {
     private processPlanner: ProcessPlannerAgent;
     private codePlanner: CodePlannerAgent;
     private taskPlanner: TaskPlannerAgent;
+    private searchAgent: SearchAgent;
     private workspaceRoot: string;
+
+    // Context tracking for "that file" references
+    private lastReferencedFile: string | null = null;
+    private lastCreatedFile: string | null = null;
+    private lastModifiedFile: string | null = null;
 
     constructor(private context: vscode.ExtensionContext) {
         this.managerAgent = new ManagerAgent();
@@ -62,7 +74,25 @@ export class AgentOrchestrator {
         this.processPlanner = new ProcessPlannerAgent();
         this.codePlanner = new CodePlannerAgent();
         this.taskPlanner = new TaskPlannerAgent();
+        this.searchAgent = new SearchAgent();
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    }
+
+    /**
+     * Get the last referenced file for context
+     */
+    getLastReferencedFile(): string | null {
+        return this.lastReferencedFile || this.lastModifiedFile || this.lastCreatedFile;
+    }
+
+    /**
+     * Set context from user message (for resolving "that file" references)
+     */
+    setContextFromMessage(message: string, activeFilePath?: string): void {
+        // Track active file as potential reference
+        if (activeFilePath) {
+            this.lastReferencedFile = activeFilePath;
+        }
     }
 
     /**
@@ -83,6 +113,7 @@ export class AgentOrchestrator {
     parseAIResponse(response: string): ParsedInstruction[] {
         const instructions: ParsedInstruction[] = [];
         const addedPaths = new Set<string>();
+        const deletedPaths = new Set<string>();
 
         // Extract all code blocks first
         const codeBlocks: { language: string; content: string; index: number }[] = [];
@@ -96,13 +127,66 @@ export class AgentOrchestrator {
             });
         }
 
+        // ===== PRIORITY 1: Check for DELETE operations first =====
+        // This prevents delete scripts from being interpreted as file creation
+
+        // Pattern D1: Delete/Remove file
+        // Matches: "delete file.txt", "remove the file.py", "delete that file"
+        const deleteFileRegex = /(?:delete|remove)(?:\s+the)?(?:\s+that)?\s+(?:file\s+)?[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?/gi;
+        while ((match = deleteFileRegex.exec(response)) !== null) {
+            const fileName = match[1].trim();
+            // Skip if filename contains 'delete' (it's likely a script name, not the target)
+            if (fileName.toLowerCase().includes('delete')) continue;
+            if (!addedPaths.has(fileName)) {
+                instructions.push({
+                    type: 'delete_file',
+                    path: fileName
+                });
+                addedPaths.add(fileName);
+                deletedPaths.add(fileName);
+            }
+        }
+
+        // Pattern D2: "I'll delete/remove" or "I have deleted/removed" patterns
+        const deleteConfirmRegex = /(?:i'?(?:ll|ve|\s+will|\s+have)?\s+)?(?:deleted?|removed?)(?:\s+the)?(?:\s+that)?\s+(?:file\s+)?[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?/gi;
+        while ((match = deleteConfirmRegex.exec(response)) !== null) {
+            const fileName = match[1].trim();
+            // Skip if filename contains 'delete' (it's likely a script name)
+            if (fileName.toLowerCase().includes('delete')) continue;
+            if (!addedPaths.has(fileName)) {
+                instructions.push({
+                    type: 'delete_file',
+                    path: fileName
+                });
+                addedPaths.add(fileName);
+                deletedPaths.add(fileName);
+            }
+        }
+
+        // ===== DETECTION: Is this a deletion-focused response? =====
+        // If the AI response indicates it's about deletion, skip ALL file creation
+        const deletionPhrases = /(?:will\s+delete|deleting|proceed\s+with\s+delet|i'?ll\s+(?:now\s+)?delete|removing\s+the|will\s+remove|i'?ll\s+remove|have\s+been\s+deleted|successfully\s+deleted|files?\s+has\s+been\s+(?:deleted|removed))/i;
+        const isDeletionResponse = deletionPhrases.test(response) || deletedPaths.size > 0;
+
+        // If this is clearly a deletion response, skip create operations entirely
+        if (isDeletionResponse) {
+            // Just return the delete instructions, don't parse for creates
+            return instructions.length > 0 ? instructions : instructions;
+        }
+
+        // ===== PRIORITY 2: Check for CREATE operations =====
+        // Only run if this is NOT a deletion response
+
         // Pattern 1: File mentioned before code block
         // Matches: "created `filename.py`" or "file named filename.py" or "file: filename.py"
         const fileNameMentionRegex = /(?:creat(?:e|ed|ing)|file\s*(?:named?|called)?|named?|called)\s*[:\s]*[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?/gi;
 
         while ((match = fileNameMentionRegex.exec(response)) !== null) {
             const fileName = match[1].trim();
+            // Skip if already processed or if it's a delete-related filename
             if (addedPaths.has(fileName)) continue;
+            if (deletedPaths.has(fileName)) continue;
+            if (fileName.toLowerCase().includes('delete') || fileName.toLowerCase().includes('remove')) continue;
 
             // Find the code block that comes after this mention
             const mentionEnd = match.index + match[0].length;
@@ -121,21 +205,25 @@ export class AgentOrchestrator {
 
         // Pattern 2: Code block starts with filename comment
         // Matches: # filename.py or // filename.js at the start of code block
+        // Skip if the filename suggests it's a delete/remove script
         for (const block of codeBlocks) {
             const firstLine = block.content.split('\n')[0];
             const fileCommentMatch = firstLine.match(/^(?:#|\/\/|\/\*)\s*([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)/);
 
             if (fileCommentMatch) {
                 const fileName = fileCommentMatch[1];
-                if (!addedPaths.has(fileName)) {
-                    instructions.push({
-                        type: 'create_file',
-                        path: fileName,
-                        language: block.language || this.getLanguageFromExtension(fileName),
-                        content: block.content
-                    });
-                    addedPaths.add(fileName);
-                }
+                // Skip delete-related script names and already processed files
+                if (fileName.toLowerCase().includes('delete') || fileName.toLowerCase().includes('remove')) continue;
+                if (addedPaths.has(fileName)) continue;
+                if (deletedPaths.has(fileName)) continue;
+
+                instructions.push({
+                    type: 'create_file',
+                    path: fileName,
+                    language: block.language || this.getLanguageFromExtension(fileName),
+                    content: block.content
+                });
+                addedPaths.add(fileName);
             }
         }
 
@@ -206,6 +294,115 @@ export class AgentOrchestrator {
             }
         }
 
+        // Pattern 8: Modify/Update/Edit file with code block
+        // Matches: "modify file.txt", "update the file.py", "edit config.json", "change file.txt"
+        const modifyFileRegex = /(?:modify|update|edit|change|replace\s+(?:content|contents)\s+(?:of|in))(?:\s+the)?\s+(?:file\s+)?[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?/gi;
+        while ((match = modifyFileRegex.exec(response)) !== null) {
+            const fileName = match[1].trim();
+            if (addedPaths.has(fileName)) continue;
+
+            // Find the code block that comes after this mention
+            const mentionEnd = match.index + match[0].length;
+            const nextBlock = codeBlocks.find(b => b.index > mentionEnd - 200);
+
+            if (nextBlock && nextBlock.content) {
+                instructions.push({
+                    type: 'modify_file',
+                    path: fileName,
+                    language: nextBlock.language || this.getLanguageFromExtension(fileName),
+                    content: nextBlock.content
+                });
+                addedPaths.add(fileName);
+            }
+        }
+
+        // Pattern 11: SEARCH/REPLACE blocks (structured format from AI)
+        // Matches: <<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE format
+        const searchReplaceRegex = /(?:in\s+(?:file\s+)?)?[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?\s*(?:\n|:)?\s*<<<<<<<?(?:\s*SEARCH)?[\s\n]+([\s\S]*?)[\s\n]*=======[\s\n]+([\s\S]*?)[\s\n]*>>>>>>?>?(?:\s*REPLACE)?/gi;
+        while ((match = searchReplaceRegex.exec(response)) !== null) {
+            const fileName = match[1].trim();
+            const searchContent = match[2].trim();
+            const replaceContent = match[3].trim();
+
+            if (!addedPaths.has(fileName + '_partial')) {
+                instructions.push({
+                    type: 'partial_edit',
+                    path: fileName,
+                    searchContent,
+                    replaceContent
+                });
+                addedPaths.add(fileName + '_partial');
+            }
+        }
+
+        // Pattern 12: Edit line N of file
+        // Matches: "edit line 5 of config.json", "change line 10 in utils.ts"
+        const lineEditRegex = /(?:edit|change|modify|update)\s+line\s+(\d+)(?:\s*(?:to|through|-)\s*(\d+))?\s+(?:of|in)\s+[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?/gi;
+        while ((match = lineEditRegex.exec(response)) !== null) {
+            const startLine = parseInt(match[1], 10);
+            const endLine = match[2] ? parseInt(match[2], 10) : startLine;
+            const fileName = match[3].trim();
+
+            // Find the code block that comes after this mention
+            const mentionEnd = match.index + match[0].length;
+            const nextBlock = codeBlocks.find(b => b.index > mentionEnd - 100);
+
+            if (nextBlock && nextBlock.content) {
+                instructions.push({
+                    type: 'partial_edit',
+                    path: fileName,
+                    content: nextBlock.content,
+                    startLine,
+                    endLine
+                });
+            }
+        }
+
+        // Pattern 13: Replace X with Y in file
+        // Matches: "replace foo with bar in utils.ts"
+        const replaceInFileRegex = /(?:replace|change|swap)\s+[`"']([^`"']+)[`"']\s+(?:with|to)\s+[`"']([^`"']+)[`"']\s+(?:in|of)\s+[`"']?([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)[`"']?/gi;
+        while ((match = replaceInFileRegex.exec(response)) !== null) {
+            const searchContent = match[1];
+            const replaceContent = match[2];
+            const fileName = match[3].trim();
+
+            instructions.push({
+                type: 'partial_edit',
+                path: fileName,
+                searchContent,
+                replaceContent
+            });
+        }
+
+        // Pattern 14: Handle "that file" / "the file" references
+        const thatFileRegex = /(?:edit|modify|update|delete|remove)\s+(?:that|the|this)\s+file/gi;
+        if (thatFileRegex.test(response) && this.getLastReferencedFile()) {
+            const lastFile = this.getLastReferencedFile()!;
+            const fileName = path.basename(lastFile);
+
+            // Check if it's a delete or edit operation
+            if (/delete|remove/i.test(response)) {
+                if (!addedPaths.has(lastFile)) {
+                    instructions.push({
+                        type: 'delete_file',
+                        path: lastFile
+                    });
+                    addedPaths.add(lastFile);
+                }
+            } else {
+                // For edit, look for associated code block
+                const firstBlock = codeBlocks[0];
+                if (firstBlock && firstBlock.content && !addedPaths.has(lastFile)) {
+                    instructions.push({
+                        type: 'modify_file',
+                        path: lastFile,
+                        content: firstBlock.content
+                    });
+                    addedPaths.add(lastFile);
+                }
+            }
+        }
+
         console.log('[AgentOrchestrator] Parsed instructions:', instructions.length, instructions.map(i => ({ type: i.type, path: i.path, cmd: i.command })));
 
         return instructions;
@@ -271,6 +468,10 @@ export class AgentOrchestrator {
 
                         // Write file
                         fs.writeFileSync(filePath, instruction.content || '');
+
+                        // Track this as the last created file
+                        this.lastCreatedFile = filePath;
+                        this.lastReferencedFile = filePath;
 
                         // Open the file in VS Code
                         const doc = await vscode.workspace.openTextDocument(filePath);
@@ -347,6 +548,194 @@ export class AgentOrchestrator {
                                 ? `✅ ${command}\n${execResult.payload.stdout.slice(0, 200)}`
                                 : `❌ ${command}\n${execResult.payload.stderr.slice(0, 200)}`,
                             success
+                        });
+                        break;
+                    }
+
+                    case 'modify_file': {
+                        const filePath = this.resolvePath(instruction.path!);
+                        onProgress(`✏️ Modifying file: ${instruction.path}`);
+
+                        if (!fs.existsSync(filePath)) {
+                            results.push({
+                                action: {
+                                    type: 'modify_file',
+                                    path: instruction.path,
+                                    description: `File not found: ${instruction.path}`
+                                },
+                                result: `❌ File not found: ${instruction.path}`,
+                                success: false
+                            });
+                            continue;
+                        }
+
+                        // Write the new content
+                        fs.writeFileSync(filePath, instruction.content || '');
+
+                        // Track this as the last modified file
+                        this.lastModifiedFile = filePath;
+                        this.lastReferencedFile = filePath;
+
+                        // Refresh the document in VS Code if it's open
+                        const uri = vscode.Uri.file(filePath);
+                        const openDoc = vscode.workspace.textDocuments.find(d => d.uri.fsPath === filePath);
+                        if (openDoc) {
+                            // Reload the document
+                            const doc = await vscode.workspace.openTextDocument(uri);
+                            await vscode.window.showTextDocument(doc, { preview: false });
+                        }
+
+                        results.push({
+                            action: {
+                                type: 'modify_file',
+                                path: instruction.path,
+                                content: instruction.content,
+                                description: `Modified ${instruction.path}`
+                            },
+                            result: `✅ Modified ${instruction.path}`,
+                            success: true
+                        });
+                        break;
+                    }
+
+                    case 'delete_file': {
+                        const filePath = this.resolvePath(instruction.path!);
+                        onProgress(`🗑️ Deleting file: ${instruction.path}`);
+
+                        if (!fs.existsSync(filePath)) {
+                            results.push({
+                                action: {
+                                    type: 'delete_file',
+                                    path: instruction.path,
+                                    description: `File not found: ${instruction.path}`
+                                },
+                                result: `⚠️ File already deleted or not found: ${instruction.path}`,
+                                success: true  // Consider it success if file doesn't exist
+                            });
+                            continue;
+                        }
+
+                        // Close the file if it's open in VS Code
+                        const openTab = vscode.window.tabGroups.all
+                            .flatMap(g => g.tabs)
+                            .find(t => (t.input as any)?.uri?.fsPath === filePath);
+                        if (openTab) {
+                            await vscode.window.tabGroups.close(openTab);
+                        }
+
+                        // Delete the file
+                        fs.unlinkSync(filePath);
+
+                        results.push({
+                            action: {
+                                type: 'delete_file',
+                                path: instruction.path,
+                                description: `Deleted ${instruction.path}`
+                            },
+                            result: `✅ Deleted ${instruction.path}`,
+                            success: true
+                        });
+                        break;
+                    }
+
+                    case 'partial_edit': {
+                        const filePath = this.resolvePath(instruction.path!);
+                        onProgress(`🔧 Surgical edit: ${instruction.path}`);
+
+                        if (!fs.existsSync(filePath)) {
+                            results.push({
+                                action: {
+                                    type: 'partial_edit',
+                                    path: instruction.path,
+                                    description: `File not found: ${instruction.path}`
+                                },
+                                result: `❌ File not found: ${instruction.path}`,
+                                success: false
+                            });
+                            continue;
+                        }
+
+                        const currentContent = fs.readFileSync(filePath, 'utf8');
+                        let newContent: string;
+                        let editDescription: string;
+
+                        if (instruction.searchContent && instruction.replaceContent !== undefined) {
+                            // Search and replace mode
+                            if (!currentContent.includes(instruction.searchContent)) {
+                                results.push({
+                                    action: {
+                                        type: 'partial_edit',
+                                        path: instruction.path,
+                                        description: `Search content not found`
+                                    },
+                                    result: `❌ Could not find the content to replace in ${instruction.path}`,
+                                    success: false
+                                });
+                                continue;
+                            }
+                            newContent = currentContent.replace(instruction.searchContent, instruction.replaceContent);
+                            editDescription = `Replaced content in ${instruction.path}`;
+                        } else if (instruction.startLine && instruction.content) {
+                            // Line-based edit mode
+                            const lines = currentContent.split('\n');
+                            const startLine = instruction.startLine - 1; // 0-indexed
+                            const endLine = (instruction.endLine || instruction.startLine) - 1;
+
+                            if (startLine < 0 || endLine >= lines.length) {
+                                results.push({
+                                    action: {
+                                        type: 'partial_edit',
+                                        path: instruction.path,
+                                        description: `Invalid line range`
+                                    },
+                                    result: `❌ Invalid line range ${instruction.startLine}-${instruction.endLine} (file has ${lines.length} lines)`,
+                                    success: false
+                                });
+                                continue;
+                            }
+
+                            const newLines = instruction.content.split('\n');
+                            lines.splice(startLine, endLine - startLine + 1, ...newLines);
+                            newContent = lines.join('\n');
+                            editDescription = `Modified lines ${instruction.startLine}-${instruction.endLine || instruction.startLine} in ${instruction.path}`;
+                        } else if (instruction.content) {
+                            // Full content replacement (fallback)
+                            newContent = instruction.content;
+                            editDescription = `Modified ${instruction.path}`;
+                        } else {
+                            results.push({
+                                action: {
+                                    type: 'partial_edit',
+                                    path: instruction.path,
+                                    description: `Invalid edit instruction`
+                                },
+                                result: `❌ No valid edit content provided`,
+                                success: false
+                            });
+                            continue;
+                        }
+
+                        // Write the updated content
+                        fs.writeFileSync(filePath, newContent);
+
+                        // Track this as the last modified file
+                        this.lastModifiedFile = filePath;
+
+                        // Refresh in VS Code
+                        const editUri = vscode.Uri.file(filePath);
+                        try {
+                            const doc = await vscode.workspace.openTextDocument(editUri);
+                            await vscode.window.showTextDocument(doc, { preview: false });
+                        } catch { }
+
+                        results.push({
+                            action: {
+                                type: 'partial_edit',
+                                path: instruction.path,
+                                description: editDescription
+                            },
+                            result: `✅ ${editDescription}`,
+                            success: true
                         });
                         break;
                     }

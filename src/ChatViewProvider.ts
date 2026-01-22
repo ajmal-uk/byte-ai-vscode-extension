@@ -5,6 +5,7 @@ import { ByteAIClient } from './byteAIClient';
 import { ContextManager } from './ContextManager';
 import { SearchAgent } from './SearchAgent';
 import { AgentOrchestrator } from './core';
+import { LongTermMemory } from './agents/LongTermMemory';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
     public static readonly viewType = 'byteAI.chatView';
@@ -13,6 +14,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     private _contextManager: ContextManager;
     private _searchAgent: SearchAgent;
     private _agentOrchestrator: AgentOrchestrator;
+    private _longTermMemory: LongTermMemory;
     private _currentSessionId: string;
     private _history: Array<{ role: 'user' | 'assistant', text: string, files?: any[], commands?: any[] }> = [];
 
@@ -24,6 +26,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         this._contextManager = new ContextManager();
         this._searchAgent = new SearchAgent();
         this._agentOrchestrator = new AgentOrchestrator(_context);
+        this._longTermMemory = new LongTermMemory(_context);
         this._currentSessionId = Date.now().toString();
         this._history = [];
     }
@@ -477,6 +480,23 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             if (conversationSummary) {
                 contextMsg = conversationSummary + '\n\n' + contextMsg;
             }
+
+            // === LONG-TERM MEMORY SEARCH ===
+            // Search for relevant memories from past sessions
+            this._view?.webview.postMessage({
+                type: 'agentStatus',
+                phase: 'Memory',
+                message: 'Searching long-term memory...'
+            });
+
+            const memoryContext = await this._longTermMemory.getRelevantContext(message);
+            if (memoryContext) {
+                contextMsg = memoryContext + contextMsg;
+            }
+
+            // Extract and store entities from user message
+            await this._longTermMemory.extractAndStore(message, this._currentSessionId);
+
             const mentionRegex = /@([^\s]+)/g;
             const matches = message.match(mentionRegex);
 
@@ -708,12 +728,15 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 // Check if auto-execute is enabled (default: true for simple tasks)
                 const autoExecute = vscode.workspace.getConfiguration('byteAI').get<boolean>('autoExecute', true);
 
-                // Check if all actions are safe (file creation, folders, or safe git commands)
+                // Check if all actions are safe (file creation, modification, deletion, folders, or safe git commands)
                 const safeCommands = ['git add', 'git commit', 'git status', 'git init', 'git log'];
                 const isSafe = instructions.length <= 5 &&
                     instructions.every(i =>
                         i.type === 'create_file' ||
                         i.type === 'create_folder' ||
+                        i.type === 'modify_file' ||
+                        i.type === 'delete_file' ||
+                        i.type === 'partial_edit' ||
                         (i.type === 'run_command' && safeCommands.some(c => i.command?.startsWith(c)))
                     );
 

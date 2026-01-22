@@ -1929,7 +1929,7 @@ export class ChatViewHtml {
                         const text = codeEl.textContent.trim();
                         
                         // Check if it looks like a file path
-                        const isFilePath = new RegExp(\`^[a-zA-Z0-9_\\-./]+\\\\.(\${extPattern})$\`, 'i').test(text);
+                        const isFilePath = new RegExp(\`^[a-zA-Z0-9_./-]+\\\\.(\${extPattern})$\`, 'i').test(text);
                         
                         if (isFilePath) {
                             // Convert to clickable file tag
