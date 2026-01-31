@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import * as WebSocket from 'ws';
+import WebSocket from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface ChatMessage {
